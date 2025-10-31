@@ -14,6 +14,14 @@ from modules import (
     user_audit,
     network_info
 )
+from modules import (
+    risk_score,
+    remediation,
+    exporter,
+    history as history_mod,
+    permissions,
+    config as config_mod
+)
 
 # Color scheme (GitHub Copilot dark theme inspired)
 COLORS = {
@@ -24,7 +32,7 @@ COLORS = {
     "button": "#2d2d2d",  # Slightly darker for buttons
     "button_text": "#0e0d0d",  # White text for buttons
     "button_hover": "#404040",  # Lighter hover state
-    "button_hover_text": "#ffffff",  # White text on hover
+    "button_hover_text": "#0e0d0d",  # White text on hover
     "success": "#4ec9b0",
     "warning": "#ce9178",
     "error": "#f14c4c",
@@ -165,19 +173,35 @@ class SecurityCheckApp:
         for text, command in check_buttons:
             ttk.Button(btn_frame, text=text, command=command, style="Custom.TButton").pack(fill="x", pady=2)
         
-        # Main Content Area
+        # Main Content Area - use Notebook with tabs: Results / Fix Issues / History / Settings
         content_frame = ttk.Frame(self.root, style="Content.TFrame")
         content_frame.grid(row=0, column=1, rowspan=2, sticky="nsew", padx=20, pady=20)
         content_frame.grid_columnconfigure(0, weight=1)
-        content_frame.grid_rowconfigure(1, weight=1)
-        
-        # Results header
-        results_header = ttk.Label(content_frame, text="Security Scan Results", style="Header.TLabel")
-        results_header.grid(row=0, column=0, sticky="w", pady=(0, 20))
-        
-        # Results area
+        content_frame.grid_rowconfigure(0, weight=1)
+
+        # Notebook for content
+        self.notebook = ttk.Notebook(content_frame)
+        self.notebook.grid(row=0, column=0, sticky="nsew")
+
+        # Results tab
+        results_tab = ttk.Frame(self.notebook, style="Content.TFrame")
+        self.notebook.add(results_tab, text="Results")
+        results_header = ttk.Label(results_tab, text="Security Scan Results", style="Header.TLabel")
+        results_header.pack(anchor="w", pady=(0, 10))
+
+        # Risk score meter
+        score_frame = ttk.Frame(results_tab, style="Content.TFrame")
+        score_frame.pack(fill="x", pady=(0, 10))
+        ttk.Label(score_frame, text="Risk Score:", style="Subheader.TLabel").pack(side=tk.LEFT)
+        self.score_var = tk.IntVar(value=100)
+        self.score_bar = ttk.Progressbar(score_frame, orient="horizontal", length=300, mode="determinate", maximum=100, variable=self.score_var)
+        self.score_bar.pack(side=tk.LEFT, padx=10)
+        self.score_label = ttk.Label(score_frame, text="100 / 100", style="Subheader.TLabel")
+        self.score_label.pack(side=tk.LEFT, padx=10)
+
+        # Results text area
         self.result_text = scrolledtext.ScrolledText(
-            content_frame,
+            results_tab,
             wrap=tk.WORD,
             font=("Consolas", 10),
             bg=COLORS["bg"],
@@ -191,8 +215,41 @@ class SecurityCheckApp:
             highlightbackground=COLORS["border"],
             highlightcolor=COLORS["selected"]
         )
-        self.result_text.grid(row=1, column=0, sticky="nsew")
+        self.result_text.pack(fill="both", expand=True)
         self.result_text.config(state=tk.DISABLED)
+
+        # Fix Issues tab
+        fix_tab = ttk.Frame(self.notebook, style="Content.TFrame")
+        self.notebook.add(fix_tab, text="Fix Issues")
+        ttk.Label(fix_tab, text="Available Fixes", style="Subheader.TLabel").pack(anchor="w", pady=(10, 5))
+        self.fix_vars = {}
+        for fid, desc in remediation.available_fixes().items():
+            var = tk.BooleanVar(value=False)
+            chk = ttk.Checkbutton(fix_tab, text=desc, variable=var)
+            chk.pack(anchor="w", padx=10, pady=2)
+            self.fix_vars[fid] = var
+
+        ttk.Button(fix_tab, text="Apply Fixes", style="Custom.TButton", command=self.apply_fixes).pack(pady=10)
+        self.fix_log = scrolledtext.ScrolledText(fix_tab, height=8, bg=COLORS["bg"], fg=COLORS["fg"]) 
+        self.fix_log.pack(fill="both", expand=True, padx=5, pady=5)
+
+        # History tab
+        history_tab = ttk.Frame(self.notebook, style="Content.TFrame")
+        self.notebook.add(history_tab, text="History")
+        ttk.Label(history_tab, text="Past Scans", style="Subheader.TLabel").pack(anchor="w", pady=(10, 5))
+        self.scan_list = ttk.Combobox(history_tab, values=[p.name for p in history_mod.list_scans()])
+        self.scan_list.pack(fill="x", padx=5, pady=2)
+        ttk.Button(history_tab, text="Load Scan", style="Custom.TButton", command=self.load_selected_scan).pack(pady=5)
+        self.history_text = scrolledtext.ScrolledText(history_tab, height=12, bg=COLORS["bg"], fg=COLORS["fg"]) 
+        self.history_text.pack(fill="both", expand=True, padx=5, pady=5)
+
+        # Settings tab
+        settings_tab = ttk.Frame(self.notebook, style="Content.TFrame")
+        self.notebook.add(settings_tab, text="Settings")
+        ttk.Label(settings_tab, text="Application Settings", style="Subheader.TLabel").pack(anchor="w", pady=(10, 5))
+        self.config = config_mod.load_config()
+        self.offline_var = tk.BooleanVar(value=self.config.get("offline_mode", False))
+        ttk.Checkbutton(settings_tab, text="Offline Mode (local-only scans)", variable=self.offline_var, command=self.toggle_offline).pack(anchor="w", padx=10, pady=5)
         
         # Status bar
         status_frame = ttk.Frame(self.root, style="Content.TFrame")
@@ -256,9 +313,47 @@ class SecurityCheckApp:
         self.update_status("Checking OS information...")
         os_name, os_version = os_detect.get_os_info()
         self.update_results(f"Operating System Information:\n\n"
-                          f"System: {os_name}\n"
-                          f"Version: {os_version}")
+                            f"System: {os_name}\n"
+                            f"Version: {os_version}")
         self.update_status("Ready")
+
+    def apply_fixes(self):
+        """Apply selected fixes (requires user approval/elevation)."""
+        selected = [fid for fid, var in self.fix_vars.items() if var.get()]
+        if not selected:
+            self.fix_log.insert(tk.END, "No fixes selected.\n")
+            return
+
+        self.fix_log.insert(tk.END, f"Applying fixes: {', '.join(selected)}\n")
+        for fid in selected:
+            try:
+                res = remediation.apply_fix(fid)
+                self.fix_log.insert(tk.END, f"{fid}: {res}\n")
+            except PermissionError as e:
+                self.fix_log.insert(tk.END, f"{fid}: Permission denied - {e}\n")
+        self.fix_log.see(tk.END)
+
+    def load_selected_scan(self):
+        sel = self.scan_list.get()
+        if not sel:
+            self.history_text.insert(tk.END, "No scan selected.\n")
+            return
+        # find path
+        for p in history_mod.list_scans():
+            if p.name == sel:
+                data = history_mod.load_scan(p)
+                self.history_text.config(state=tk.NORMAL)
+                self.history_text.delete(1.0, tk.END)
+                self.history_text.insert(tk.END, self.format_dict(data))
+                self.history_text.config(state=tk.DISABLED)
+                return
+        self.history_text.insert(tk.END, "Selected scan not found.\n")
+
+    def toggle_offline(self):
+        self.config["offline_mode"] = bool(self.offline_var.get())
+        config_mod.save_config(self.config)
+        state = "ON" if self.config["offline_mode"] else "OFF"
+        self.update_status(f"Offline Mode: {state}")
 
     def run_firewall_check(self):
         self.update_status("Checking firewall status...")
@@ -293,72 +388,80 @@ class SecurityCheckApp:
     def run_quick_scan(self):
         """Run essential security checks"""
         self.update_status("Initializing quick scan...", "normal")
-        
+
         # OS Check
         self.update_status("Checking operating system...", "normal")
         os_name, os_version = os_detect.get_os_info()
-        
+
         # Firewall Check
         self.update_status("Checking firewall status...", "normal")
         fw_status = firewall_check.get_status()
-        
+
         # Antivirus Check
         self.update_status("Checking antivirus status...", "normal")
         av_status = av_check.get_av_status()
-        
+
         # Compile results
-        quick_data = {
-            "Operating System": f"{os_name} {os_version}",
-            "Firewall": {
-                "Status": fw_status.get("status", "unknown").upper(),
-                "Details": fw_status
-            },
-            "Antivirus": {
-                "Status": av_status.get("status", "unknown").upper(),
-                "Details": av_status
-            }
+        quick_findings = {
+            "os": {"name": os_name, "version": os_version},
+            "firewall": fw_status,
+            "antivirus": av_status
         }
-        
-        # Format results with status indicators
-        result_text = "📊 Quick Scan Results\n\n"
-        
-        # OS Info
-        result_text += "🖥️ Operating System\n"
-        result_text += f"   {quick_data['Operating System']}\n\n"
-        
-        # Firewall Status
-        fw_status_text = quick_data["Firewall"]["Status"]
-        result_text += "🔐 Firewall Status\n"
-        result_text += f"   Status: {fw_status_text}\n"
-        if fw_status_text.lower() == "active":
-            self.result_text.tag_add("success", "insert")
-        elif fw_status_text.lower() == "inactive":
-            self.result_text.tag_add("error", "insert")
-        result_text += "\n"
-        
-        # Antivirus Status
-        av_status_text = quick_data["Antivirus"]["Status"]
-        result_text += "🛡️ Antivirus Status\n"
-        result_text += f"   Status: {av_status_text}\n"
-        if av_status_text.lower() == "active":
-            self.result_text.tag_add("success", "insert")
-        elif av_status_text.lower() == "inactive":
-            self.result_text.tag_add("error", "insert")
-        
+
+        # Compute risk score
+        scorer = risk_score.RiskScorer()
+        # Map quick_findings to expected keys for scorer
+        mapped = {
+            "firewall": fw_status,
+            "antivirus": av_status,
+            # other keys default
+        }
+        score, deductions = scorer.calculate_score(mapped)
+        band, _ = risk_score.interpret_band(score)
+
         # Display results
+        result_text = "� Quick Scan Results\n\n"
+        result_text += f"🖥️ Operating System: {os_name} {os_version}\n\n"
+        result_text += f"🔐 Firewall: {fw_status.get('status', 'unknown')}\n"
+        result_text += f"🛡️ Antivirus: {av_status.get('status', 'unknown')}\n\n"
+        if deductions:
+            result_text += "Deductions:\n"
+            for d in deductions:
+                result_text += f" - {d['reason']}: -{d['points']}\n"
+
+        result_text += f"\nRisk Score: {score}/100 ({band})\n"
+
+        # Update score UI
+        try:
+            self.score_var.set(score)
+            self.score_label.configure(text=f"{score} / 100")
+        except Exception:
+            pass
+
         self.update_results(result_text)
-        
-        # Update status based on overall security posture
-        if all(item["Status"].lower() == "active" 
-               for item in [quick_data["Firewall"], quick_data["Antivirus"]]):
+
+        # Save to history (quick)
+        history_mod.save_scan({
+            "timestamp": datetime.now().isoformat(),
+            "type": "quick",
+            "os": {"name": os_name, "version": os_version},
+            "findings": quick_findings,
+            "risk_score": score,
+            "deductions": deductions
+        })
+
+        # Status
+        if score >= 80:
             self.update_status("Quick scan completed - System secure", "success")
-        else:
+        elif score >= 50:
             self.update_status("Quick scan completed - Issues found", "warning")
+        else:
+            self.update_status("Quick scan completed - At risk", "error")
 
     def run_full_audit(self):
         """Run comprehensive system audit"""
         self.update_status("Running full system audit...")
-        
+
         # Gather all information
         os_name, os_version = os_detect.get_os_info()
         fw_status = firewall_check.get_status()
@@ -366,7 +469,7 @@ class SecurityCheckApp:
         disk_status = disk_encryption.get_encryption_status()
         user_status = user_audit.get_user_accounts()
         net_info = network_info.get_network_info()
-        
+
         # Compile audit data
         audit_data = {
             "timestamp": datetime.now().isoformat(),
@@ -377,38 +480,40 @@ class SecurityCheckApp:
             "user_accounts": user_status,
             "network": net_info
         }
+
+        # Score the audit
+        scorer = risk_score.RiskScorer()
+        mapped = {
+            "firewall": fw_status,
+            "antivirus": av_status,
+            "disk_encryption": disk_status,
+            "user_accounts": user_status,
+            # updates key may be added elsewhere
+        }
+        score, deductions = scorer.calculate_score(mapped)
+        audit_data["risk_score"] = score
+        audit_data["deductions"] = deductions
+
+        # Exports via exporter module
+        json_file = exporter.export_json(audit_data)
+        md_file = exporter.export_markdown({"os": audit_data.get("os"), "risk_score": score, "findings": audit_data})
+
+        # Save to history folder
+        history_mod.save_scan(audit_data)
         
-        # Save audit logs
-        exports_dir = Path(__file__).parent.parent / "exports"
-        exports_dir.mkdir(exist_ok=True)
-        
-        # Save JSON format
-        json_file = exports_dir / f"audit_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-        with open(json_file, "w") as f:
-            json.dump(audit_data, f, indent=4)
-            
-        # Save Markdown format
-        md_file = exports_dir / f"audit_log_{datetime.now().strftime('%Y%m%d')}.md"
-        with open(md_file, "w") as f:
-            f.write("# NEXUM-CHECKPOINT Security Audit Report\n\n")
-            f.write(f"Scan Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
-            f.write("## System Information\n")
-            f.write(f"- Operating System: {os_name} {os_version}\n\n")
-            f.write("## Security Status\n")
-            f.write(f"- Firewall: {fw_status.get('status', 'unknown')}\n")
-            f.write(f"- Antivirus: {av_status.get('status', 'unknown')}\n")
-            f.write(f"- Disk Encryption: {disk_status.get('status', 'unknown')}\n\n")
-            f.write("## Detailed Results\n")
-            f.write("```json\n")
-            f.write(json.dumps(audit_data, indent=2))
-            f.write("\n```\n")
-        
+        # Update score UI
+        try:
+            self.score_var.set(score)
+            self.score_label.configure(text=f"{score} / 100")
+        except Exception:
+            pass
+
         # Display results
         self.update_results("Full System Audit Results:\n\n" + 
-                          self.format_dict(audit_data) +
-                          f"\nAudit logs have been saved to:\n" +
-                          f"- {json_file.name}\n" +
-                          f"- {md_file.name}")
+                            self.format_dict(audit_data) +
+                            f"\nAudit logs have been saved to:\n" +
+                            f"- {json_file.name}\n" +
+                            f"- {md_file.name}")
         self.update_status("Ready")
 
 if __name__ == "__main__":
