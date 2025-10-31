@@ -4,28 +4,28 @@
 
 ---
 
-## 🔷 What Is This?
+## What Is This?
 
 **NEXUM-CHECKPOINT** is a lightweight, branded audit utility designed to snapshot the security posture of any local device—Windows or Linux. Built for sovereign operators, sysadmins, and cyber newcomers, it delivers clarity, credibility, and control in a single scan.
 
-This is part of the [Apolune Co.](https://github.com/apoluneco) artifact arc and the Docf0rd grind series. It’s not just a tool—it’s a legacy move.
+This is part of the [Apolune Co.](https://github.com/DcFord) artifact arc and the Docf0rd grind series. It’s not just a tool—it’s a legacy move.
 
 ---
 
-## 🧠 Core Features (v0.1)
+## Core Features (v0.1)
 
-- 🧠 OS Detection (Windows/Linux/macOS)
-- 🔐 Firewall Status
-- 🛡️ Antivirus Status
-- 💾 Disk Encryption Check
-- 👤 User Account Audit
-- 📡 Network Interface Overview
-- 🧾 System Info Snapshot
-- 🖥️ GUI Dashboard (Tkinter-based)
+- OS Detection (Windows/Linux/macOS)
+-  Firewall Status
+-  Antivirus Status
+-  Disk Encryption Check
+-  User Account Audit
+-  Network Interface Overview
+-  System Info Snapshot
+-  GUI Dashboard (Tkinter-based)
 
 ---
 
-## 🛠️ How to Run
+##  How to Run
 
 ```bash
 git clone https://github.com/yourusername/nexum-checkpoint
@@ -37,7 +37,7 @@ python gui/main_gui.py
 
 ---
 
-## 📁 File Structure
+##  File Structure
 
 ```
 NEXUM-CHECKPOINT/
@@ -61,7 +61,7 @@ NEXUM-CHECKPOINT/
 
 ---
 
-## 🧪 Roadmap
+##  Roadmap
 
 - [ ] Export results to Markdown/JSON
 - [ ] Risk scoring module
@@ -72,27 +72,15 @@ NEXUM-CHECKPOINT/
 
 ---
 
-## 🎥 Devlog Series
-
-This build is part of the **Docf0rd grind arc**, where every artifact is recorded, narrated, and shipped.  
-Watch the process, learn the mindset, and follow the legacy at:  
-📺 [Docf0rd YouTube Channel](https://youtube.com/@docf0rd) *(link placeholder)*
-
----
-
-## 🧬 License
+##  License
 
 MIT — because sovereignty should be open source.
 
 ---
 
-## 🧠 Author
+##  Author
 
 **Zachary Ford**  
 Founder of Apolune Co.  
-Architect of Titianix OS, Nexum Security, and Docf0rd  
-📍 Rosenthal Heights, QLD  
-🧠 [LinkedIn](https://linkedin.com/in/zacharyford) *(link placeholder)*  
-🧠 [GitHub](https://github.com/docf0rd) *(link placeholder)*
-
+Architect of Titianix OS(coming soon), Nexum Security(more to come), and Docf0rd  
 ---
