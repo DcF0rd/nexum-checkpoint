@@ -68,3 +68,14 @@ NEXUM-CHECKPOINT/
   * **License:** MIT — because learning and sovereignty should be **open source**.
   * **Author:** Zachary Ford ([@DcF0rd](https://github.com/DcF0rd))
       * *Building for fun and learning out loud.*
+   
+---
+
+### Did AI build this?
+
+Yes, AI helped build this. You wouldn’t expect a builder to use only a hand screwdriver to build a house — they use drills *and* screwdrivers. Same here: I use AI to speed up the grunt work, but every decision, tweak, and polish is mine.
+
+I’m still a student and always learning, so I welcome feedback on any issues or improvements you spot.
+
+---
+
